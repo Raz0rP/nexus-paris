@@ -1,0 +1,776 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Nexus Paris — Point de rencontre optimal</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <style>
+    :root {
+      --bg-deep:    #0c0507;
+      --glass-bg:   rgba(255, 195, 140, 0.055);
+      --glass-bg-h: rgba(255, 195, 140, 0.09);
+      --glass-bd:   rgba(255, 135, 65, 0.14);
+      --glass-bd-s: rgba(255, 135, 65, 0.28);
+      --accent:     #FF6B35;
+      --accent2:    #FF4757;
+      --amber:      #FFB347;
+      --glow:       rgba(255, 107, 53, 0.28);
+      --txt:        rgba(255, 255, 255, 0.94);
+      --txt2:       rgba(255, 210, 175, 0.72);
+      --txt3:       rgba(255, 185, 145, 0.42);
+      --sidebar:    400px;
+      --r:          12px;
+    }
+    *, *::before, *::after { margin:0; padding:0; box-sizing:border-box; }
+    html, body { height:100%; overflow:hidden; }
+
+    body {
+      display:flex;
+      background: radial-gradient(ellipse 80% 100% at 15% 50%, #2b0e00 0%, #0c0507 55%, #100308 100%);
+      font-family: 'Inter', system-ui, sans-serif;
+      color: var(--txt);
+    }
+    body::after {
+      content:'';
+      position:fixed; inset:0; pointer-events:none;
+      background:
+        radial-gradient(circle at 8%  18%, rgba(255,107,53,.05) 0%, transparent 40%),
+        radial-gradient(circle at 92% 82%, rgba(255,71, 87,.04) 0%, transparent 40%),
+        radial-gradient(circle at 50% 50%, rgba(255,179,71,.025) 0%, transparent 60%);
+    }
+
+    /* ── SIDEBAR ────────────────────────────────── */
+    .sidebar {
+      width: var(--sidebar);
+      flex-shrink: 0;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      background: rgba(10, 4, 6, 0.78);
+      backdrop-filter: blur(28px);
+      -webkit-backdrop-filter: blur(28px);
+      border-right: 1px solid var(--glass-bd);
+      z-index: 10;
+      overflow-y: auto;
+      overflow-x: hidden;
+      scrollbar-width: thin;
+      scrollbar-color: rgba(255,107,53,.25) transparent;
+    }
+    .sidebar::-webkit-scrollbar { width:4px; }
+    .sidebar::-webkit-scrollbar-thumb { background:rgba(255,107,53,.25); border-radius:2px; }
+
+    /* Header */
+    .hd {
+      padding: 26px 24px 18px;
+      border-bottom: 1px solid var(--glass-bd);
+      flex-shrink: 0;
+    }
+    .logo {
+      display:flex; align-items:center; gap:10px; margin-bottom:6px;
+    }
+    .logo-ic {
+      width:38px; height:38px; border-radius:11px; flex-shrink:0;
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      box-shadow: 0 4px 18px var(--glow);
+      display:flex; align-items:center; justify-content:center;
+      font-size:19px;
+    }
+    .logo-tx {
+      font-size:22px; font-weight:800; letter-spacing:-.6px;
+      background: linear-gradient(120deg, #fff 0%, var(--amber) 90%);
+      -webkit-background-clip:text; -webkit-text-fill-color:transparent;
+      background-clip:text;
+    }
+    .tagline { font-size:12px; color:var(--txt3); line-height:1.5; }
+
+    /* Content */
+    .sb-body { flex:1; padding:18px; display:flex; flex-direction:column; gap:14px; }
+
+    /* Section label */
+    .lbl {
+      font-size:10.5px; font-weight:600; text-transform:uppercase;
+      letter-spacing:1.1px; color:var(--txt3); margin-bottom:9px;
+    }
+
+    /* Glass card */
+    .card {
+      background: var(--glass-bg);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border: 1px solid var(--glass-bd);
+      border-radius: var(--r);
+      padding: 14px;
+      transition: background .2s, border-color .2s;
+    }
+    .card:hover { background:var(--glass-bg-h); border-color:rgba(255,135,65,.22); }
+
+    /* Mode selector */
+    .modes {
+      display:flex; gap:5px; padding:4px;
+      background:rgba(255,195,140,.035);
+      border:1px solid rgba(255,135,65,.1);
+      border-radius:10px;
+    }
+    .mode-btn {
+      flex:1; padding:8px 4px; border:none; border-radius:8px;
+      font-size:12px; font-weight:500; font-family:inherit;
+      cursor:pointer; transition:all .2s;
+      background:transparent; color:var(--txt3);
+      display:flex; align-items:center; justify-content:center; gap:4px;
+    }
+    .mode-btn.on {
+      background:rgba(255,107,53,.14);
+      color:var(--accent);
+    }
+
+    /* Team list */
+    .team-list { display:flex; flex-direction:column; gap:7px; min-height:36px; }
+    .empty { font-size:12px; color:var(--txt3); text-align:center; padding:12px 0; }
+
+    .mbr {
+      display:flex; align-items:center; gap:9px; padding:9px 11px;
+      background:rgba(255,195,140,.04);
+      border:1px solid rgba(255,135,65,.09);
+      border-radius:10px;
+      transition:all .2s;
+      animation: si .28s ease;
+    }
+    @keyframes si { from{opacity:0;transform:translateX(-8px)} to{opacity:1;transform:none} }
+    .mbr.geocoded { border-color:rgba(100,220,100,.18); }
+    .mbr.error    { border-color:rgba(255,71,87,.28); }
+
+    .av {
+      width:30px; height:30px; border-radius:50%; flex-shrink:0;
+      display:flex; align-items:center; justify-content:center;
+      font-size:12px; font-weight:700; color:#fff;
+    }
+    .mbr-info { flex:1; min-width:0; }
+    .mbr-name { font-size:12.5px; font-weight:600; }
+    .mbr-addr { font-size:11px; color:var(--txt3); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+
+    .st { width:7px; height:7px; border-radius:50%; flex-shrink:0; }
+    .st.pending { background:rgba(255,200,80,.55); }
+    .st.loading { background:var(--amber); animation:pu .9s infinite; }
+    .st.geocoded{ background:rgba(100,220,100,.75); }
+    .st.error   { background:var(--accent2); }
+    @keyframes pu { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.45;transform:scale(.75)} }
+
+    .rm-btn {
+      background:none; border:none; cursor:pointer;
+      color:var(--txt3); font-size:15px; padding:2px; border-radius:4px;
+      transition:color .15s; flex-shrink:0;
+      display:flex; align-items:center; justify-content:center;
+    }
+    .rm-btn:hover { color:var(--accent2); }
+
+    /* Form */
+    .form { display:flex; flex-direction:column; gap:9px; }
+    .il { font-size:11px; font-weight:500; color:var(--txt2); margin-bottom:4px; display:block; }
+    .gi {
+      width:100%; background:rgba(255,195,140,.035);
+      border:1px solid rgba(255,135,65,.13); border-radius:8px;
+      padding:9px 12px; color:var(--txt); font-size:13px; font-family:inherit;
+      outline:none; transition:all .2s;
+    }
+    .gi::placeholder { color:var(--txt3); }
+    .gi:focus {
+      border-color:rgba(255,107,53,.48); background:rgba(255,195,140,.06);
+      box-shadow:0 0 0 3px rgba(255,107,53,.1);
+    }
+
+    .btn-add {
+      display:flex; align-items:center; justify-content:center; gap:6px;
+      padding:9px 14px; background:rgba(255,107,53,.09);
+      border:1px solid rgba(255,107,53,.28); border-radius:8px;
+      color:var(--accent); font-size:12.5px; font-weight:500; font-family:inherit;
+      cursor:pointer; transition:all .2s;
+    }
+    .btn-add:hover { background:rgba(255,107,53,.16); border-color:rgba(255,107,53,.46); transform:translateY(-1px); }
+
+    /* Demo button */
+    .btn-demo {
+      display:flex; align-items:center; justify-content:center; gap:5px;
+      padding:7px 14px; background:rgba(255,179,71,.07);
+      border:1px solid rgba(255,179,71,.2); border-radius:8px;
+      color:var(--amber); font-size:11.5px; font-weight:500; font-family:inherit;
+      cursor:pointer; transition:all .2s;
+    }
+    .btn-demo:hover { background:rgba(255,179,71,.13); }
+
+    /* Primary button */
+    .btn-primary {
+      width:100%; padding:13px;
+      background:linear-gradient(135deg, var(--accent), var(--accent2));
+      border:none; border-radius:var(--r);
+      color:#fff; font-size:13.5px; font-weight:600; font-family:inherit;
+      cursor:pointer; transition:all .2s;
+      box-shadow:0 4px 22px var(--glow);
+      display:flex; align-items:center; justify-content:center; gap:8px;
+    }
+    .btn-primary:hover:not(:disabled) { transform:translateY(-2px); box-shadow:0 6px 28px rgba(255,107,53,.42); }
+    .btn-primary:disabled { opacity:.42; cursor:not-allowed; }
+
+    /* Loading */
+    .ld-card { text-align:center; padding:22px 14px; }
+    .spinner {
+      width:30px; height:30px; border:3px solid rgba(255,107,53,.15);
+      border-top-color:var(--accent); border-radius:50%;
+      animation:sp .75s linear infinite; margin:0 auto 10px;
+    }
+    @keyframes sp { to{transform:rotate(360deg)} }
+    .ld-main { font-size:12.5px; color:var(--txt2); }
+    .ld-sub  { font-size:11px; color:var(--txt3); margin-top:3px; }
+
+    /* Result cards */
+    .res-card {
+      padding:15px; cursor:pointer; position:relative; overflow:hidden;
+      transition:all .2s;
+    }
+    .res-card::before {
+      content:''; position:absolute; top:0; left:0; right:0; height:2px;
+      background:linear-gradient(90deg, var(--accent), var(--accent2));
+      opacity:0; transition:opacity .2s;
+    }
+    .res-card:hover::before, .res-card.on::before { opacity:1; }
+    .res-card.on { background:rgba(255,107,53,.075); border-color:rgba(255,107,53,.25); }
+
+    .rc-head { display:flex; align-items:center; gap:8px; margin-bottom:9px; }
+    .rc-badge {
+      width:22px; height:22px; border-radius:50%; flex-shrink:0;
+      background:linear-gradient(135deg, var(--accent), var(--accent2));
+      display:flex; align-items:center; justify-content:center;
+      font-size:10.5px; font-weight:700;
+    }
+    .rc-lbl { font-size:11.5px; font-weight:600; color:var(--txt2); }
+
+    .rc-loc  { font-size:13.5px; font-weight:600; margin-bottom:3px; }
+    .rc-meta { font-size:11px; color:var(--txt3); margin-bottom:10px; }
+
+    .tt-row { display:flex; align-items:center; justify-content:space-between; font-size:11.5px; margin-bottom:4px; }
+    .tt-name { color:var(--txt2); display:flex; align-items:center; gap:6px; }
+    .tt-dot  { width:7px; height:7px; border-radius:50%; flex-shrink:0; }
+    .tt-vals { display:flex; gap:6px; }
+    .bdg {
+      display:flex; align-items:center; gap:3px; padding:2px 7px;
+      border-radius:20px; font-size:10.5px; font-weight:500;
+    }
+    .bdg.bk { background:rgba(100,180,255,.1); color:rgba(130,195,255,.9); }
+    .bdg.mt { background:rgba(160,120,255,.1); color:rgba(190,160,255,.9); }
+
+    .venues-sep { margin-top:10px; padding-top:10px; border-top:1px solid rgba(255,135,65,.09); }
+    .venues-lbl { font-size:10px; font-weight:600; text-transform:uppercase; letter-spacing:.7px; color:var(--txt3); margin-bottom:6px; }
+    .chips { display:flex; flex-wrap:wrap; gap:4px; }
+    .chip {
+      padding:2px 7px; background:rgba(255,195,140,.045);
+      border:1px solid rgba(255,135,65,.1);
+      border-radius:20px; font-size:10.5px; color:var(--txt2);
+    }
+
+    /* ── MAP ─────────────────────────────────────── */
+    #map-wrap { flex:1; position:relative; }
+    #map      { width:100%; height:100%; }
+
+    .map-legend {
+      position:absolute; bottom:18px; right:18px; z-index:1000;
+      background:rgba(10,4,6,.85); backdrop-filter:blur(16px);
+      border:1px solid var(--glass-bd); border-radius:var(--r);
+      padding:11px 13px; display:none;
+    }
+    .ml-title { font-size:9.5px; font-weight:600; text-transform:uppercase; letter-spacing:.8px; color:var(--txt3); margin-bottom:7px; }
+    .ml-row   { display:flex; align-items:center; gap:7px; font-size:11px; color:var(--txt2); margin-bottom:4px; }
+    .ml-dot   { width:9px; height:9px; border-radius:50%; flex-shrink:0; }
+
+    /* Notification */
+    .notif {
+      position:fixed; top:18px; right:18px; z-index:9999;
+      padding:11px 15px; background:rgba(12,5,7,.92);
+      backdrop-filter:blur(18px);
+      border:1px solid var(--glass-bd); border-radius:var(--r);
+      font-size:12.5px; max-width:280px;
+      animation: siri .28s ease;
+    }
+    .notif.error   { border-color:rgba(255,71,87,.4); }
+    .notif.success { border-color:rgba(100,220,100,.3); }
+    @keyframes siri { from{opacity:0;transform:translateX(15px)} to{opacity:1;transform:none} }
+
+    /* Leaflet overrides */
+    .leaflet-popup-content-wrapper {
+      background:rgba(14,6,9,.92) !important;
+      backdrop-filter:blur(18px) !important;
+      border:1px solid var(--glass-bd) !important;
+      border-radius:var(--r) !important;
+      box-shadow:0 8px 30px rgba(0,0,0,.5) !important;
+      color:var(--txt) !important;
+    }
+    .leaflet-popup-tip { background:rgba(14,6,9,.92) !important; }
+    .leaflet-popup-content { margin:11px 13px !important; font-family:'Inter',sans-serif !important; font-size:12.5px !important; }
+    .pp-name { font-weight:600; margin-bottom:3px; }
+    .pp-sub  { font-size:11px; color:var(--txt3); }
+    .leaflet-control-zoom a { background:rgba(14,6,9,.85) !important; color:var(--txt) !important; border-color:var(--glass-bd) !important; }
+    .leaflet-control-zoom a:hover { background:rgba(255,107,53,.15) !important; }
+
+    @media(max-width:768px){
+      body{flex-direction:column;}
+      .sidebar{width:100%;height:50vh;}
+      #map-wrap{height:50vh;}
+    }
+  </style>
+</head>
+<body>
+
+<!-- ── SIDEBAR ────────────────────────────────────── -->
+<aside class="sidebar">
+  <div class="hd">
+    <div class="logo">
+      <div class="logo-ic">⬡</div>
+      <span class="logo-tx">Nexus Paris</span>
+    </div>
+    <p class="tagline">Trouvez le point de rencontre idéal pour votre équipe à Paris</p>
+  </div>
+
+  <div class="sb-body">
+
+    <!-- Mode transport -->
+    <div>
+      <div class="lbl">Mode de transport</div>
+      <div class="modes">
+        <button class="mode-btn on" id="mode-bike"   onclick="setMode('bike')">🚲 Vélo</button>
+        <button class="mode-btn"    id="mode-metro"  onclick="setMode('metro')">🚇 Métro</button>
+        <button class="mode-btn"    id="mode-both"   onclick="setMode('both')">⚖️ Combiné</button>
+      </div>
+    </div>
+
+    <!-- Team -->
+    <div>
+      <div class="lbl">Équipe &mdash; <span id="cnt">0</span> personne(s)</div>
+      <div id="team-list" class="team-list">
+        <div class="empty">Ajoutez des collaborateurs pour commencer</div>
+      </div>
+    </div>
+
+    <!-- Add form -->
+    <div class="card">
+      <div class="lbl" style="margin-bottom:12px">Ajouter un collaborateur</div>
+      <div class="form">
+        <div>
+          <label class="il">Prénom / Identifiant</label>
+          <input class="gi" id="i-name" placeholder="ex : Marie" autocomplete="off" />
+        </div>
+        <div>
+          <label class="il">Adresse de départ</label>
+          <input class="gi" id="i-addr" placeholder="ex : 15 rue de Rivoli, Paris" autocomplete="off" />
+        </div>
+        <button class="btn-add" onclick="addMember()">+ Ajouter</button>
+      </div>
+    </div>
+
+    <!-- Demo -->
+    <button class="btn-demo" onclick="loadDemo()">🗺️ Charger un exemple (4 adresses)</button>
+
+    <!-- Find -->
+    <button class="btn-primary" id="btn-find" onclick="runFind()" disabled>
+      🎯 Trouver le point optimal
+    </button>
+
+    <!-- Loading -->
+    <div id="loading" style="display:none">
+      <div class="card ld-card">
+        <div class="spinner"></div>
+        <div class="ld-main" id="ld-main">Géolocalisation…</div>
+        <div class="ld-sub"  id="ld-sub"></div>
+      </div>
+    </div>
+
+    <!-- Results -->
+    <div id="results" style="display:none">
+      <div class="lbl">Points de rencontre optimaux</div>
+      <div id="res-list" style="display:flex;flex-direction:column;gap:9px"></div>
+    </div>
+
+  </div>
+</aside>
+
+<!-- ── MAP ───────────────────────────────────────── -->
+<div id="map-wrap">
+  <div id="map"></div>
+  <div class="map-legend" id="legend">
+    <div class="ml-title">Équipe</div>
+    <div id="legend-body"></div>
+  </div>
+</div>
+
+<script>
+// ── STATE ──────────────────────────────────────────
+const S = {
+  members: [],
+  mode: 'bike',
+  results: [],
+  activeIdx: 0,
+  mMarkers: [],      // member markers
+  rMarkers: [],      // result markers
+};
+
+const COLORS = [
+  '#FF6B35','#FF4757','#FFB347','#FF8C42',
+  '#E84393','#FF6B9D','#4ECDC4','#45B7D1'
+];
+
+// ── MAP ────────────────────────────────────────────
+const map = L.map('map', { center:[48.8566,2.3522], zoom:13, zoomControl:false });
+L.control.zoom({ position:'bottomleft' }).addTo(map);
+L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+  attribution:'© OpenStreetMap © CARTO', subdomains:'abcd', maxZoom:19
+}).addTo(map);
+
+// ── MODE ───────────────────────────────────────────
+function setMode(m) {
+  S.mode = m;
+  document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('on'));
+  document.getElementById('mode-'+m).classList.add('on');
+}
+
+// ── MEMBER MANAGEMENT ──────────────────────────────
+function addMember() {
+  const n = document.getElementById('i-name').value.trim();
+  const a = document.getElementById('i-addr').value.trim();
+  if (!n || !a) { notify('Veuillez remplir le nom et l\'adresse.', 'error'); return; }
+  S.members.push({ id:Date.now(), name:n, address:a, coords:null, status:'pending',
+    color: COLORS[S.members.length % COLORS.length] });
+  document.getElementById('i-name').value = '';
+  document.getElementById('i-addr').value = '';
+  document.getElementById('i-name').focus();
+  renderTeam(); updateBtn();
+}
+
+function removeMember(id) {
+  S.members = S.members.filter(m => m.id !== id);
+  renderTeam(); updateBtn(); redrawMemberMarkers();
+  if (S.members.length < 2) { document.getElementById('results').style.display='none'; clearRMarkers(); }
+}
+
+function renderTeam() {
+  const el = document.getElementById('team-list');
+  document.getElementById('cnt').textContent = S.members.length;
+  if (!S.members.length) { el.innerHTML='<div class="empty">Ajoutez des collaborateurs pour commencer</div>'; hideLegend(); return; }
+  el.innerHTML = S.members.map(m => `
+    <div class="mbr ${m.status}" id="mbr-${m.id}">
+      <div class="av" style="background:linear-gradient(135deg,${m.color},${m.color}aa)">${esc(m.name)[0].toUpperCase()}</div>
+      <div class="mbr-info">
+        <div class="mbr-name">${esc(m.name)}</div>
+        <div class="mbr-addr">${esc(m.address)}</div>
+      </div>
+      <div class="st ${m.status}"></div>
+      <button class="rm-btn" onclick="removeMember(${m.id})" title="Supprimer">✕</button>
+    </div>`).join('');
+}
+
+function updateBtn() {
+  document.getElementById('btn-find').disabled = S.members.length < 2;
+}
+
+// ── DEMO DATA ──────────────────────────────────────
+function loadDemo() {
+  const demo = [
+    { name:'Marie',   address:'20 Rue de la Paix, Paris' },
+    { name:'Thomas',  address:'Place de la Bastille, Paris' },
+    { name:'Sophie',  address:'Rue Lepic, Montmartre, Paris' },
+    { name:'Antoine', address:'Avenue Bosquet, Paris' },
+  ];
+  S.members = [];
+  demo.forEach((d,i) => S.members.push({ id:Date.now()+i, name:d.name, address:d.address, coords:null, status:'pending', color:COLORS[i] }));
+  renderTeam(); updateBtn();
+  notify('4 adresses d\'exemple chargées !', 'success');
+}
+
+// ── GEOCODING ──────────────────────────────────────
+let lastGeo = 0;
+async function geocode(addr) {
+  const wait = Math.max(0, 1150 - (Date.now() - lastGeo));
+  if (wait) await sleep(wait);
+  lastGeo = Date.now();
+  const q = encodeURIComponent(addr.toLowerCase().includes('paris') ? addr : addr + ', Paris, France');
+  const r = await fetch(`https://nominatim.openstreetmap.org/search?q=${q}&format=json&limit=1&countrycodes=fr`, { headers:{'Accept-Language':'fr-FR'} });
+  const d = await r.json();
+  if (!d.length) throw new Error('Adresse introuvable');
+  return { lat:parseFloat(d[0].lat), lon:parseFloat(d[0].lon) };
+}
+
+// ── REVERSE GEOCODE ────────────────────────────────
+async function reverseGeocode(lat, lon) {
+  await sleep(600);
+  try {
+    const r = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json&zoom=16&accept-language=fr`);
+    const d = await r.json();
+    if (d.address) {
+      const a = d.address;
+      const hood = a.quarter || a.suburb || a.neighbourhood || '';
+      const dist = a.city_district || '';
+      const road = a.road || '';
+      if (hood && dist) return `${hood}, ${dist}`;
+      if (hood) return hood;
+      if (dist) return dist;
+      if (road) return road;
+    }
+  } catch {}
+  return `${lat.toFixed(4)}, ${lon.toFixed(4)}`;
+}
+
+// ── OSRM TABLE ─────────────────────────────────────
+async function osrmTable(sources, dests) {
+  const all = [...sources, ...dests];
+  const coords = all.map(c => `${c.lon},${c.lat}`).join(';');
+  const si = sources.map((_,i)=>i).join(',');
+  const di = dests.map((_,i)=>sources.length+i).join(',');
+  const url = `https://router.project-osrm.org/table/v1/bike/${coords}?sources=${si}&destinations=${di}&annotations=duration`;
+  const r = await fetch(url, { signal:AbortSignal.timeout(12000) });
+  const d = await r.json();
+  if (d.code !== 'Ok') throw new Error(d.message);
+  return d.durations; // [src][dst] in seconds, null if unreachable
+}
+
+// ── CANDIDATES GRID ────────────────────────────────
+function makeCandidates(members) {
+  const coords = members.map(m => m.coords);
+  const lats = coords.map(c => c.lat), lons = coords.map(c => c.lon);
+  const clat = lats.reduce((a,b)=>a+b,0)/lats.length;
+  const clon = lons.reduce((a,b)=>a+b,0)/lons.length;
+  const dlat = Math.max(...lats) - Math.min(...lats);
+  const dlon = Math.max(...lons) - Math.min(...lons);
+  const rl = Math.max(0.022, Math.min(0.075, dlat * 0.62));
+  const rlo= Math.max(0.032, Math.min(0.10,  dlon * 0.62));
+  const PARIS = { minLat:48.815, maxLat:48.905, minLon:2.225, maxLon:2.47 };
+  const cands = [], S = 5;
+  for (let i=0;i<S;i++) for (let j=0;j<S;j++) {
+    const lat = clat - rl + (2*rl*i/(S-1));
+    const lon = clon - rlo + (2*rlo*j/(S-1));
+    if (lat>=PARIS.minLat && lat<=PARIS.maxLat && lon>=PARIS.minLon && lon<=PARIS.maxLon)
+      cands.push({lat,lon});
+  }
+  if (cands.length < 4) {
+    [[48.855,2.330],[48.865,2.345],[48.845,2.360],[48.875,2.320]].forEach(([lat,lon])=>cands.push({lat,lon}));
+  }
+  return cands;
+}
+
+// ── DISTANCE ───────────────────────────────────────
+function hav(a, b) {
+  const R=6371, dLat=(b.lat-a.lat)*Math.PI/180, dLon=(b.lon-a.lon)*Math.PI/180;
+  const x = Math.sin(dLat/2)**2 + Math.cos(a.lat*Math.PI/180)*Math.cos(b.lat*Math.PI/180)*Math.sin(dLon/2)**2;
+  return R*2*Math.atan2(Math.sqrt(x),Math.sqrt(1-x));
+}
+function metroEst(km) { return (km/21)*60 + 8; } // 21 km/h avg + 8 min overhead
+
+// ── SCORING ────────────────────────────────────────
+function score(bikeS, metroMin) {
+  const times = S.mode==='bike'  ? bikeS.map(t=>t/60)
+              : S.mode==='metro' ? metroMin
+              : bikeS.map((t,i)=>Math.min(t/60, metroMin[i]));
+  const n=times.length;
+  const avg = times.reduce((a,b)=>a+b,0)/n;
+  const max = Math.max(...times);
+  const sd  = Math.sqrt(times.reduce((a,t)=>a+(t-avg)**2,0)/n);
+  return avg*0.5 + max*0.3 + sd*0.2;
+}
+
+// ── OVERPASS VENUES ────────────────────────────────
+async function venues(lat, lon) {
+  const q = `[out:json][timeout:7];(node["amenity"~"cafe|restaurant|bar|coworking_space"](around:550,${lat},${lon}););out body 7;`;
+  try {
+    const r = await fetch('https://overpass-api.de/api/interpreter', {
+      method:'POST', body:'data='+encodeURIComponent(q),
+      headers:{'Content-Type':'application/x-www-form-urlencoded'},
+      signal:AbortSignal.timeout(7000)
+    });
+    const d = await r.json();
+    return d.elements.filter(e=>e.tags?.name).slice(0,6).map(e=>({ name:e.tags.name, type:e.tags.amenity }));
+  } catch { return []; }
+}
+
+// ── MAIN FIND ──────────────────────────────────────
+async function runFind() {
+  if (S.members.length < 2) return;
+  const btnEl = document.getElementById('btn-find');
+  const ldEl  = document.getElementById('loading');
+  const resEl = document.getElementById('results');
+  btnEl.style.display='none'; ldEl.style.display='block'; resEl.style.display='none';
+  clearRMarkers();
+
+  try {
+    // 1 — Geocode
+    setLd('Géolocalisation des adresses…', '');
+    for (let i=0; i<S.members.length; i++) {
+      const m = S.members[i];
+      setStatus(m.id, 'loading');
+      setLd('Géolocalisation des adresses…', `${m.name} (${i+1}/${S.members.length})`);
+      try {
+        m.coords = await geocode(m.address);
+        setStatus(m.id, 'geocoded');
+      } catch {
+        setStatus(m.id, 'error');
+        notify(`Adresse introuvable pour ${m.name}.`, 'error');
+      }
+    }
+    const vm = S.members.filter(m=>m.coords);
+    if (vm.length < 2) throw new Error('Au moins 2 adresses valides sont nécessaires.');
+    redrawMemberMarkers();
+
+    // 2 — Candidates
+    setLd('Analyse du réseau parisien…', 'Génération des points candidats');
+    await sleep(200);
+    const cands = makeCandidates(vm);
+
+    // 3 — Travel times
+    setLd('Calcul des temps de trajet…', `${cands.length} points candidats analysés`);
+    let bikeMatrix;
+    try {
+      bikeMatrix = await osrmTable(vm.map(m=>m.coords), cands);
+    } catch (e) {
+      console.warn('OSRM fallback:', e);
+      bikeMatrix = vm.map(m => cands.map(c => (hav(m.coords,c)*1.25/15)*3600));
+    }
+
+    // 4 — Score
+    setLd('Optimisation du point de rencontre…', '');
+    const scored = cands.map((c,j) => {
+      const bikeS  = vm.map((_,i) => bikeMatrix[i]?.[j] ?? 99999);
+      const metroM = vm.map(m => metroEst(hav(m.coords,c)));
+      return { c, bikeS, metroM, bikeMin:bikeS.map(t=>Math.round(t/60)), metroMin:metroM.map(Math.round), sc:score(bikeS,metroM), vm };
+    }).sort((a,b)=>a.sc-b.sc).slice(0,3);
+
+    // 5 — Enrich
+    setLd('Recherche des lieux à proximité…', '');
+    for (const r of scored) {
+      r.loc = await reverseGeocode(r.c.lat, r.c.lon);
+      r.venues = await venues(r.c.lat, r.c.lon);
+    }
+
+    S.results = scored; S.activeIdx = 0;
+    ldEl.style.display='none'; btnEl.style.display='flex'; resEl.style.display='block';
+    renderResults(); addResultMarkers();
+    if (scored.length) map.setView([scored[0].c.lat, scored[0].c.lon], 14);
+
+  } catch(e) {
+    ldEl.style.display='none'; btnEl.style.display='flex';
+    notify(e.message || 'Une erreur est survenue.', 'error');
+  }
+}
+
+// ── RENDER RESULTS ─────────────────────────────────
+function renderResults() {
+  const LABELS = ['Meilleur équilibre','Alternative #2','Alternative #3'];
+  document.getElementById('res-list').innerHTML = S.results.map((r,i) => {
+    const avgBk = Math.round(r.bikeMin.reduce((a,b)=>a+b,0)/r.bikeMin.length);
+    const maxBk = Math.max(...r.bikeMin);
+    return `<div class="card res-card ${i===S.activeIdx?'on':''}" onclick="selectResult(${i})">
+      <div class="rc-head">
+        <div class="rc-badge">${i+1}</div>
+        <span class="rc-lbl">${LABELS[i]}</span>
+      </div>
+      <div class="rc-loc">${esc(r.loc)}</div>
+      <div class="rc-meta">Moy. ${avgBk} min · Max ${maxBk} min à vélo</div>
+      <div>
+        ${r.vm.map((m,k)=>`
+          <div class="tt-row">
+            <div class="tt-name"><div class="tt-dot" style="background:${m.color}"></div>${esc(m.name)}</div>
+            <div class="tt-vals">
+              <span class="bdg bk">🚲 ${r.bikeMin[k]}min</span>
+              <span class="bdg mt">🚇 ~${r.metroMin[k]}min</span>
+            </div>
+          </div>`).join('')}
+      </div>
+      ${r.venues.length ? `
+        <div class="venues-sep">
+          <div class="venues-lbl">À proximité</div>
+          <div class="chips">${r.venues.map(v=>`<span class="chip">${venueEmoji(v.type)} ${esc(v.name)}</span>`).join('')}</div>
+        </div>` : ''}
+    </div>`;
+  }).join('');
+}
+
+function venueEmoji(t) { return {cafe:'☕',restaurant:'🍽️',bar:'🍷',coworking_space:'💻'}[t]||'📍'; }
+
+function selectResult(i) {
+  S.activeIdx = i;
+  renderResults(); addResultMarkers();
+  const r = S.results[i];
+  map.setView([r.c.lat, r.c.lon], 15);
+}
+
+// ── MAP MARKERS ────────────────────────────────────
+function redrawMemberMarkers() {
+  S.mMarkers.forEach(m=>map.removeLayer(m)); S.mMarkers=[];
+  const vm = S.members.filter(m=>m.coords);
+  if (!vm.length) return;
+  vm.forEach(m => {
+    const ic = L.divIcon({
+      html:`<div style="width:34px;height:34px;border-radius:50%;background:linear-gradient(135deg,${m.color},${m.color}bb);
+        border:2.5px solid rgba(255,255,255,.28);display:flex;align-items:center;justify-content:center;
+        font-size:13px;font-weight:700;color:#fff;box-shadow:0 3px 14px ${m.color}55;
+        font-family:Inter,sans-serif">${esc(m.name)[0].toUpperCase()}</div>`,
+      className:'', iconSize:[34,34], iconAnchor:[17,17]
+    });
+    const mk = L.marker([m.coords.lat,m.coords.lon],{icon:ic})
+      .bindPopup(`<div class="pp-name">${esc(m.name)}</div><div class="pp-sub">${esc(m.address)}</div>`)
+      .addTo(map);
+    S.mMarkers.push(mk);
+  });
+  updateLegend(vm);
+  if (vm.length>1) map.fitBounds(L.latLngBounds(vm.map(m=>[m.coords.lat,m.coords.lon])),{padding:[50,50]});
+}
+
+function clearRMarkers() { S.rMarkers.forEach(m=>map.removeLayer(m)); S.rMarkers=[]; }
+
+function addResultMarkers() {
+  clearRMarkers();
+  S.results.forEach((r,i) => {
+    const active = i===S.activeIdx;
+    const sz = active ? 42 : 30;
+    const ic = L.divIcon({
+      html:`<svg width="${sz}" height="${Math.round(sz*1.28)}" viewBox="0 0 40 51" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <defs><linearGradient id="pg${i}" x1="0" y1="0" x2="40" y2="51" gradientUnits="userSpaceOnUse">
+          <stop offset="0%" stop-color="#FF6B35"/><stop offset="100%" stop-color="#FF4757"/>
+        </linearGradient></defs>
+        <path d="M20 0C9 0 0 9 0 20C0 34 20 51 20 51C20 51 40 34 40 20C40 9 31 0 20 0Z" fill="url(#pg${i})"/>
+        ${active?'<circle cx="20" cy="20" r="16" fill="rgba(255,255,255,.12)"/>':''}
+        <text x="20" y="25" text-anchor="middle" fill="white" font-size="${active?'14':'11'}" font-weight="700" font-family="Inter,sans-serif">${i+1}</text>
+        ${active?`<filter id="glow${i}"><feGaussianBlur stdDeviation="3" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter>`:''}
+      </svg>`,
+      className:'', iconSize:[sz,Math.round(sz*1.28)], iconAnchor:[sz/2,Math.round(sz*1.28)]
+    });
+    const avgBk = Math.round(r.bikeMin.reduce((a,b)=>a+b,0)/r.bikeMin.length);
+    const mk = L.marker([r.c.lat,r.c.lon],{icon:ic, zIndexOffset:active?1000:0})
+      .bindPopup(`<div class="pp-name">${i+1}. ${esc(r.loc)}</div><div class="pp-sub">⌀ ${avgBk} min à vélo</div>`)
+      .addTo(map);
+    if (active) mk.openPopup();
+    S.rMarkers.push(mk);
+  });
+}
+
+function updateLegend(vm) {
+  const el = document.getElementById('legend');
+  document.getElementById('legend-body').innerHTML = vm.map(m=>`
+    <div class="ml-row"><div class="ml-dot" style="background:${m.color}"></div>${esc(m.name)}</div>`).join('');
+  el.style.display = vm.length ? 'block' : 'none';
+}
+function hideLegend() { document.getElementById('legend').style.display='none'; }
+
+// ── HELPERS ────────────────────────────────────────
+function setLd(m,s){ document.getElementById('ld-main').textContent=m; document.getElementById('ld-sub').textContent=s; }
+function setStatus(id,st){ const m=S.members.find(m=>m.id===id); if(m){m.status=st;renderTeam();} }
+function notify(msg,type='info'){
+  const el=document.createElement('div'); el.className=`notif ${type}`; el.textContent=msg;
+  document.body.appendChild(el); setTimeout(()=>el.remove(),4000);
+}
+function sleep(ms){ return new Promise(r=>setTimeout(r,ms)); }
+function esc(s){ const d=document.createElement('div'); d.textContent=s; return d.innerHTML; }
+
+// Enter key shortcuts
+document.getElementById('i-addr').addEventListener('keydown',e=>{ if(e.key==='Enter') addMember(); });
+document.getElementById('i-name').addEventListener('keydown',e=>{ if(e.key==='Enter') document.getElementById('i-addr').focus(); });
+</script>
+</body>
+</html>
