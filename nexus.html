@@ -191,15 +191,6 @@
     }
     .btn-add:hover { background:rgba(255,107,53,.16); border-color:rgba(255,107,53,.46); transform:translateY(-1px); }
 
-    /* Demo button */
-    .btn-demo {
-      display:flex; align-items:center; justify-content:center; gap:5px;
-      padding:7px 14px; background:rgba(255,179,71,.07);
-      border:1px solid rgba(255,179,71,.2); border-radius:8px;
-      color:var(--amber); font-size:11.5px; font-weight:500; font-family:inherit;
-      cursor:pointer; transition:all .2s;
-    }
-    .btn-demo:hover { background:rgba(255,179,71,.13); }
 
     /* Autocomplete */
     .ac-wrap { position:relative; }
@@ -378,17 +369,82 @@
     .leaflet-control-zoom a { background:rgba(14,6,9,.85) !important; color:var(--txt) !important; border-color:var(--glass-bd) !important; }
     .leaflet-control-zoom a:hover { background:rgba(255,107,53,.15) !important; }
 
+    /* ── MOBILE BOTTOM SHEET ─────────────────────── */
     @media(max-width:768px){
-      body{flex-direction:column;}
-      .sidebar{width:100%;height:50vh;}
-      #map-wrap{height:50vh;}
+      body { flex-direction:column; }
+
+      /* Map takes full screen */
+      #map-wrap {
+        position:fixed; inset:0; z-index:0;
+        height:100dvh !important;
+      }
+
+      /* Sidebar becomes bottom sheet */
+      .sidebar {
+        position:fixed; bottom:0; left:0; right:0; z-index:100;
+        width:100%; height:auto;
+        max-height:90dvh;
+        border-right:none;
+        border-top:1px solid var(--glass-bd-s);
+        border-radius:20px 20px 0 0;
+        background:rgba(10,4,6,.97);
+        transform:translateY(calc(100% - 72px));
+        transition:transform .35s cubic-bezier(.32,.72,0,1);
+        overflow:hidden;
+        will-change:transform;
+        touch-action:none;
+      }
+      .sidebar.sheet-mid      { transform:translateY(45%); }
+      .sidebar.sheet-expanded { transform:translateY(0); }
+
+      /* Drag handle */
+      .sheet-handle {
+        display:flex; justify-content:center; align-items:center;
+        padding:14px 0 8px; cursor:grab; flex-shrink:0;
+      }
+      .sheet-handle-bar {
+        width:36px; height:4px; border-radius:2px;
+        background:rgba(255,135,65,.35);
+      }
+
+      /* Header compact on mobile */
+      .hd { padding:10px 20px 12px; }
+      .logo-tx { font-size:18px; }
+      .tagline  { display:none; }
+
+      /* Scrollable body */
+      .sb-body { padding:14px 16px; overflow-y:auto; max-height:calc(90dvh - 90px); }
+
+      /* FAB to toggle sheet */
+      .sheet-fab {
+        display:flex;
+        position:fixed; bottom:88px; right:16px; z-index:101;
+        width:48px; height:48px; border-radius:50%;
+        background:linear-gradient(135deg,var(--accent),var(--accent2));
+        box-shadow:0 4px 18px var(--glow);
+        align-items:center; justify-content:center;
+        font-size:20px; border:none; cursor:pointer;
+        transition:transform .2s;
+      }
+      .sheet-fab:active { transform:scale(.92); }
+
+      /* Legend repositioned */
+      .map-legend { bottom:88px; right:68px; }
+    }
+
+    @media(min-width:769px){
+      .sheet-handle { display:none; }
+      .sheet-fab    { display:none; }
     }
   </style>
 </head>
 <body>
 
-<!-- ── SIDEBAR ────────────────────────────────────── -->
-<aside class="sidebar">
+<!-- ── SIDEBAR / BOTTOM SHEET ────────────────────── -->
+<aside class="sidebar" id="sheet">
+  <div class="sheet-handle" id="sheet-handle">
+    <div class="sheet-handle-bar"></div>
+  </div>
   <div class="hd">
     <div class="logo">
       <div class="logo-ic">⬡</div>
@@ -436,9 +492,6 @@
       </div>
     </div>
 
-    <!-- Demo -->
-    <button class="btn-demo" onclick="loadDemo()">🗺️ Charger un exemple (4 adresses)</button>
-
     <!-- Find -->
     <button class="btn-primary" id="btn-find" onclick="runFind()" disabled>
       🎯 Trouver le point optimal
@@ -465,6 +518,9 @@
 <!-- ── MAP ───────────────────────────────────────── -->
 <!-- Autocomplete dropdown — in body to escape sidebar stacking context -->
 <div class="ac-list" id="ac-list"></div>
+
+<!-- FAB mobile -->
+<button class="sheet-fab" id="sheet-fab" onclick="toggleSheet()" aria-label="Ouvrir le panneau">👥</button>
 
 <div id="map-wrap">
   <div id="map"></div>
@@ -581,19 +637,6 @@ function updateBtn() {
   document.getElementById('btn-find').disabled = S.members.length < 2;
 }
 
-// ── DEMO DATA ──────────────────────────────────────
-function loadDemo() {
-  const demo = [
-    { name:'Marie',   address:'20 Rue de la Paix, Paris' },
-    { name:'Thomas',  address:'Place de la Bastille, Paris' },
-    { name:'Sophie',  address:'Rue Lepic, Montmartre, Paris' },
-    { name:'Antoine', address:'Avenue Bosquet, Paris' },
-  ];
-  S.members = [];
-  demo.forEach((d,i) => S.members.push({ id:Date.now()+i, name:d.name, address:d.address, coords:null, status:'pending', color:COLORS[i] }));
-  renderTeam(); updateBtn();
-  notify('4 adresses d\'exemple chargées !', 'success');
-}
 
 // ── GEOCODING ──────────────────────────────────────
 let lastGeo = 0;
@@ -1026,6 +1069,72 @@ addMember = function() {
 
 // Enter key shortcuts
 document.getElementById('i-name').addEventListener('keydown',e=>{ if(e.key==='Enter') document.getElementById('i-addr').focus(); });
+
+// ── MOBILE BOTTOM SHEET ────────────────────────────
+(function(){
+  const sheet   = document.getElementById('sheet');
+  const handle  = document.getElementById('sheet-handle');
+  const fab     = document.getElementById('sheet-fab');
+  if (!sheet || !handle) return;
+
+  // States: 'collapsed' | 'mid' | 'expanded'
+  let sheetState = 'collapsed';
+
+  function applyState(s) {
+    sheetState = s;
+    sheet.classList.remove('sheet-mid','sheet-expanded');
+    if (s === 'mid')      sheet.classList.add('sheet-mid');
+    if (s === 'expanded') sheet.classList.add('sheet-expanded');
+    if (fab) fab.textContent = s === 'collapsed' ? '👥' : '✕';
+  }
+
+  window.toggleSheet = function() {
+    applyState(sheetState === 'collapsed' ? 'mid' : 'collapsed');
+  };
+
+  // Drag logic
+  let startY = 0, startTrans = 0, dragging = false;
+
+  function getTranslateY() {
+    const style = window.getComputedStyle(sheet);
+    const mat   = new DOMMatrix(style.transform);
+    return mat.m42;
+  }
+
+  handle.addEventListener('touchstart', e => {
+    if (window.innerWidth > 768) return;
+    dragging  = true;
+    startY    = e.touches[0].clientY;
+    startTrans= getTranslateY();
+    sheet.style.transition = 'none';
+  }, { passive:true });
+
+  window.addEventListener('touchmove', e => {
+    if (!dragging) return;
+    const dy  = e.touches[0].clientY - startY;
+    const raw = startTrans + dy;
+    const h   = sheet.offsetHeight;
+    const clamped = Math.max(0, Math.min(h - 72, raw));
+    sheet.style.transform = `translateY(${clamped}px)`;
+  }, { passive:true });
+
+  window.addEventListener('touchend', e => {
+    if (!dragging) return;
+    dragging = false;
+    sheet.style.transition = '';
+    const cur = getTranslateY();
+    const h   = sheet.offsetHeight;
+    const pct = cur / h; // 0 = fully open, 1 = fully closed
+    if      (pct < 0.2)  applyState('expanded');
+    else if (pct < 0.65) applyState('mid');
+    else                  applyState('collapsed');
+  });
+
+  // Collapse sheet when map is tapped
+  document.getElementById('map')?.addEventListener('click', () => {
+    if (window.innerWidth <= 768 && sheetState !== 'collapsed') applyState('collapsed');
+  });
+})();
 </script>
 </body>
 </html>
