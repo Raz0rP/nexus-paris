@@ -270,6 +270,48 @@
       border-radius:20px; font-size:10.5px; color:var(--txt2);
     }
 
+    /* Winner card */
+    .res-card.winner {
+      border-color: rgba(255,179,71,.38);
+      background: rgba(255,179,71,.055);
+      box-shadow: 0 0 0 1px rgba(255,179,71,.14), 0 8px 28px rgba(255,107,53,.13);
+    }
+    .res-card.winner::before { background: linear-gradient(90deg, var(--amber), var(--accent)); opacity:1; }
+
+    .winner-tag {
+      display:inline-flex; align-items:center; gap:5px;
+      padding:3px 9px;
+      background:rgba(255,179,71,.14); border:1px solid rgba(255,179,71,.3);
+      border-radius:20px; font-size:10px; font-weight:700;
+      color:var(--amber); text-transform:uppercase; letter-spacing:.6px;
+      margin-bottom:10px;
+    }
+
+    /* Score pills */
+    .score-pills { display:flex; gap:5px; flex-wrap:wrap; margin-bottom:11px; }
+    .score-pill {
+      padding:3px 8px;
+      background:rgba(255,195,140,.055); border:1px solid rgba(255,135,65,.12);
+      border-radius:20px; font-size:11px; color:var(--txt2);
+      display:flex; align-items:center; gap:3px;
+    }
+
+    /* Travel time bars */
+    .tt-bar-row { margin-bottom:7px; }
+    .tt-bar-hd  { display:flex; align-items:center; justify-content:space-between; margin-bottom:3px; }
+    .tt-bar-nm  { font-size:11.5px; color:var(--txt2); display:flex; align-items:center; gap:6px; }
+    .tt-bar-vs  { display:flex; gap:5px; }
+    .tt-bar-bg  { height:3px; background:rgba(255,195,140,.08); border-radius:2px; overflow:hidden; }
+    .tt-bar-fg  { height:100%; border-radius:2px; transition:width .5s ease; }
+
+    /* Why block */
+    .why-block {
+      margin-top:11px; padding:10px 12px;
+      background:rgba(255,179,71,.05); border:1px solid rgba(255,179,71,.13);
+      border-radius:9px; font-size:11.5px; color:var(--txt2); line-height:1.6;
+    }
+    .why-block strong { color:var(--amber); font-weight:600; }
+
     /* ── MAP ─────────────────────────────────────── */
     #map-wrap { flex:1; position:relative; }
     #map      { width:100%; height:100%; }
@@ -661,34 +703,76 @@ async function runFind() {
 
 // ── RENDER RESULTS ─────────────────────────────────
 function renderResults() {
-  const LABELS = ['Meilleur équilibre','Alternative #2','Alternative #3'];
-  document.getElementById('res-list').innerHTML = S.results.map((r,i) => {
-    const avgBk = Math.round(r.bikeMin.reduce((a,b)=>a+b,0)/r.bikeMin.length);
-    const maxBk = Math.max(...r.bikeMin);
-    return `<div class="card res-card ${i===S.activeIdx?'on':''}" onclick="selectResult(${i})">
-      <div class="rc-head">
-        <div class="rc-badge">${i+1}</div>
-        <span class="rc-lbl">${LABELS[i]}</span>
-      </div>
+  const globalMax = Math.max(...S.results.flatMap(r => r.bikeMin));
+
+  document.getElementById('res-list').innerHTML = S.results.map((r, i) => {
+    const avgBk  = Math.round(r.bikeMin.reduce((a,b)=>a+b,0)/r.bikeMin.length);
+    const maxBk  = Math.max(...r.bikeMin);
+    const minBk  = Math.min(...r.bikeMin);
+    const spread = maxBk - minBk;
+    const isWin  = i === 0;
+    const isOn   = i === S.activeIdx;
+
+    const header = isWin
+      ? `<div class="winner-tag">⭐ Point optimal recommandé</div>`
+      : `<div class="rc-head"><div class="rc-badge">${i+1}</div><span class="rc-lbl">Alternative ${i}</span></div>`;
+
+    const bars = r.vm.map((m,k) => {
+      const bk  = r.bikeMin[k];
+      const mt  = r.metroMin[k];
+      const pct = Math.round((bk / globalMax) * 100);
+      const col = bk <= avgBk ? '#4ECDC4' : bk <= avgBk*1.35 ? '#FFB347' : '#FF6B35';
+      return `<div class="tt-bar-row">
+        <div class="tt-bar-hd">
+          <div class="tt-bar-nm"><div class="tt-dot" style="background:${m.color}"></div>${esc(m.name)}</div>
+          <div class="tt-bar-vs">
+            <span class="bdg bk">🚲 ${bk}min</span>
+            <span class="bdg mt">🚇 ~${mt}min</span>
+          </div>
+        </div>
+        <div class="tt-bar-bg"><div class="tt-bar-fg" style="width:${pct}%;background:${col}"></div></div>
+      </div>`;
+    }).join('');
+
+    const why = (isWin || isOn) ? `<div class="why-block">${buildWhyText(r, i, avgBk, maxBk, spread)}</div>` : '';
+
+    const venueHtml = r.venues.length ? `
+      <div class="venues-sep">
+        <div class="venues-lbl">À proximité</div>
+        <div class="chips">${r.venues.map(v=>`<span class="chip">${venueEmoji(v.type)} ${esc(v.name)}</span>`).join('')}</div>
+      </div>` : '';
+
+    return `<div class="card res-card ${isOn?'on':''} ${isWin?'winner':''}" onclick="selectResult(${i})">
+      ${header}
       <div class="rc-loc">${esc(r.loc)}</div>
-      <div class="rc-meta">Moy. ${avgBk} min · Max ${maxBk} min à vélo</div>
-      <div>
-        ${r.vm.map((m,k)=>`
-          <div class="tt-row">
-            <div class="tt-name"><div class="tt-dot" style="background:${m.color}"></div>${esc(m.name)}</div>
-            <div class="tt-vals">
-              <span class="bdg bk">🚲 ${r.bikeMin[k]}min</span>
-              <span class="bdg mt">🚇 ~${r.metroMin[k]}min</span>
-            </div>
-          </div>`).join('')}
+      <div class="score-pills">
+        <div class="score-pill">⏱ Moy. ${avgBk} min</div>
+        <div class="score-pill">📍 Max ${maxBk} min</div>
+        <div class="score-pill">⚖️ Écart ${spread} min</div>
       </div>
-      ${r.venues.length ? `
-        <div class="venues-sep">
-          <div class="venues-lbl">À proximité</div>
-          <div class="chips">${r.venues.map(v=>`<span class="chip">${venueEmoji(v.type)} ${esc(v.name)}</span>`).join('')}</div>
-        </div>` : ''}
+      ${bars}${why}${venueHtml}
     </div>`;
   }).join('');
+}
+
+function buildWhyText(r, idx, avgBk, maxBk, spread) {
+  if (idx === 0) {
+    const alt    = S.results[1];
+    const altAvg = alt ? Math.round(alt.bikeMin.reduce((a,b)=>a+b,0)/alt.bikeMin.length) : null;
+    const gain   = altAvg ? altAvg - avgBk : 0;
+    const parts  = [];
+    if (spread <= 8)  parts.push(`les trajets sont très équilibrés — écart de seulement <strong>${spread} min</strong> entre le plus proche et le plus loin`);
+    else if (spread <= 15) parts.push(`l'écart entre membres est contenu (<strong>${spread} min</strong>)`);
+    if (maxBk <= 20)  parts.push(`personne ne dépasse <strong>${maxBk} min</strong>`);
+    if (gain > 1)     parts.push(`<strong>${gain} min de moins</strong> en moyenne que l'alternative suivante`);
+    const body = parts.length ? parts.join(' · ') + '.' : `temps moyen de <strong>${avgBk} min</strong> pour l'ensemble de l'équipe.`;
+    return `Ce point obtient le <strong>meilleur score global</strong> : ${body}`;
+  } else {
+    const best    = S.results[0];
+    const bestAvg = Math.round(best.bikeMin.reduce((a,b)=>a+b,0)/best.bikeMin.length);
+    const diff    = avgBk - bestAvg;
+    return `<strong>+${diff} min</strong> en moyenne par rapport au point optimal. Peut être préférable si certains membres sont concentrés dans cette zone.`;
+  }
 }
 
 function venueEmoji(t) { return {cafe:'☕',restaurant:'🍽️',bar:'🍷',coworking_space:'💻'}[t]||'📍'; }
@@ -742,8 +826,11 @@ function addResultMarkers() {
       className:'', iconSize:[sz,Math.round(sz*1.28)], iconAnchor:[sz/2,Math.round(sz*1.28)]
     });
     const avgBk = Math.round(r.bikeMin.reduce((a,b)=>a+b,0)/r.bikeMin.length);
+    const timesHtml = r.vm.map((m,k) =>
+      `<div class="pp-sub" style="margin-top:4px"><span style="color:${m.color}">●</span> ${esc(m.name)} — 🚲 ${r.bikeMin[k]} min · 🚇 ~${r.metroMin[k]} min</div>`
+    ).join('');
     const mk = L.marker([r.c.lat,r.c.lon],{icon:ic, zIndexOffset:active?1000:0})
-      .bindPopup(`<div class="pp-name">${i+1}. ${esc(r.loc)}</div><div class="pp-sub">⌀ ${avgBk} min à vélo</div>`)
+      .bindPopup(`<div class="pp-name">${i===0?'⭐ ':''}${i+1}. ${esc(r.loc)}</div><div class="pp-sub" style="margin-bottom:5px;color:rgba(255,179,71,.8)">⌀ ${avgBk} min à vélo</div>${timesHtml}`)
       .addTo(map);
     if (active) mk.openPopup();
     S.rMarkers.push(mk);
